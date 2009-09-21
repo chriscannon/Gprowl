@@ -175,7 +175,7 @@ class GmailIdleNotifier:
                 p.stdin.write(". examine INBOX\n")
             # Extract the email information
             elif("INBOX selected. (Success)" in line):         
-                p.stdin.write(". fetch %s (body[header.fields (from subject date)])\n" % self.emailId)
+                p.stdin.write(". fetch %s (body[header.fields (from subject date)])\n" % emailId)
                 p.stdout.readline()
                 
                 for i in range(0,3):
@@ -206,7 +206,7 @@ class GmailIdleNotifier:
             end = date.rfind("+")
 
         t = time.strptime(str(date[6:end]).strip(),"%a, %d %b %Y %H:%M:%S")
-        t = time.strftime("%I:%M %p %a, %b %d")
+        t = time.strftime("%I:%M %p %a, %b %d",t)
         
         return t
     

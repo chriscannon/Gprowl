@@ -14,8 +14,10 @@ Requirements:
 
 Upcoming features:
 * Verify Gmail credentials and Prowl API key.
+   - ADDED v0.9
 
 Current bugs:
 1. Python crashes when using strptime in a thread.
    OS: Mac OS X 10.6.1 (Snow Leopard)
    Python: 2.5.2 or 2.5.4
+   * FIXED v0.9

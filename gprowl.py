@@ -1,9 +1,13 @@
 #!/usr/bin/env python
-"""Push Gmail Prowl Notifier
+"""Gprowl
 
-Connects to Gmail using IMAP's IDLE mode and sends messages
-over Prowl to an iPhone.
+A Python script that connects to Gmail in IMAP's IDLE mode and pushes new messages to an iPhone using Prowl.
 
+Requirements:
+    Python 2.5 or greater
+    OpenSSL 0.9.8j or greater
+    Prowl iPhone application
+    
 Usage: python gprowl.py [options]
 
 Options:
@@ -15,7 +19,7 @@ Example:
 """
 
 __author__ = "Christopher T. Cannon (christophertcannon@gmail.com)"
-__version__ = "0.5"
+__version__ = "0.9"
 __date__ = "2009/09/20"
 __copyright__ = "Copyright (c) 2009 Christopher T. Cannon"
 
@@ -41,21 +45,84 @@ cmd = [openssl, "s_client", "-connect", "imap.gmail.com:993", "-crlf"]
 
 class GmailIdleNotifier:
     def __init__(self):
+        self.checkConnection()
         self.getProwlApiKey()
         self.getGmailCredentials()
     
+    def checkConnection(self):
+        """Determines if the system has an Internet connection available."""
+        import urllib2
+        try:
+            urllib2.urlopen("http://www.google.com")
+        except:
+            print "An Internet connection is not available."
+            sys.exit(1)
+        
     def getProwlApiKey(self):
         """Promt the user and verify their Prowl API key."""
-        global apiKey
-        apiKey = raw_input("Prowl API key: ")         
+        global apiKey, prowlUrl
+        
+        loop = True
+        while(loop):
+            key = raw_input("Prowl API key: ")
+            import httplib
+            headers = {"Content-type": "application/x-www-form-urlencoded",
+            'User-Agent': "Gprowl/%s" % str(__version__)}
+
+            path = "/publicapi/verify?apikey=%s" % key
+            conn = httplib.HTTPSConnection(prowlUrl)
+            conn.request("GET", path, "", headers)
+            response = conn.getresponse()
+
+            if("401" in str(response.status)):
+                print "The API key entered is not valid."
+                print "Please re-enter the API key."
+            elif("200" in str(response.status)):
+                apiKey = key
+                loop = False
+                
+            conn.close()
+                     
         
     def getGmailCredentials(self):
         """Prompt the user and verify their Gmail credentials."""
         global username, password
-        username = raw_input("Gmail User Name: ")
         
         import getpass
-        password = getpass.getpass("Gmail Password: ")
+        loop = True
+        while(loop):
+            uname = raw_input("Gmail User Name: ")
+            passwd = getpass.getpass("Gmail Password: ")
+            
+            if(not uname.endswith("@gmail.com")):
+                print "Please append @gmail.com to the user name."
+            else:
+                global cmd
+                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+                line = p.stdout.readline()
+                while(line != None):
+                    # Input the credentials
+                    if("* OK Gimap ready" in line):
+                        p.stdin.write(". login %s %s\n" % (uname, passwd))
+                    # Credentials are valid
+                    elif("authenticated (Success)" in line):
+                        loop = False
+                        username = uname
+                        password = passwd
+                        break
+                    elif("Invalid credentials" in line):
+                        print "The Gmail username or password entered is invalid."
+                        print "Please re-enter the Gmail username and password."
+                        break
+                    
+                    line = p.stdout.readline()
+                
+                # Kill the subprocess
+                import os
+                import signal
+                os.kill(p.pid, signal.SIGTERM)
+            
     
     def start(self):
         """Log into the Google IMAP server and enable IDLE mode."""
@@ -86,18 +153,12 @@ class GmailIdleNotifier:
                 emailId = line.split(" ")[1]
                 if(emailId not in previousId):
                     print "A new message has been received..."
-                    f = FetchEmailThread(emailId)
+                    self.fetchEmail(emailId)
                     previousId = emailId
     
             line = p.stdout.readline()
-
-class FetchEmailThread(Thread):
-    def __init__(self, emailId):
-        Thread.__init__(self)
-        self.emailId = emailId
-        self.start()
           
-    def run(self):
+    def fetchEmail(self, emailId):
         """Grab the email's information and send a Prowl message."""
         global cmd
         p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -134,7 +195,7 @@ class FetchEmailThread(Thread):
         import signal
         os.kill(p.pid, signal.SIGTERM)
             
-        self.sendProwlMessage("Date: %s\n%s\n%s" % (date, sender, subject))
+        self.sendProwlMessage("%s\n%s\n%s" % (date, sender, subject))
         
     def formatDate(self,date):
         """Returns a more human-readable format of the email's date."""    
@@ -145,7 +206,7 @@ class FetchEmailThread(Thread):
             end = date.rfind("+")
 
         t = time.strptime(str(date[6:end]).strip(),"%a, %d %b %Y %H:%M:%S")
-        t = time.strftime("%I:%M %p %a, %d %b")
+        t = time.strftime("%I:%M %p %a, %b %d")
         
         return t
     

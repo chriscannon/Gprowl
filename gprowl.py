@@ -199,13 +199,18 @@ class GmailIdleNotifier:
         
     def formatDate(self,date):
         """Returns a more human-readable format of the email's date."""    
-        end = 0
+        end = len(date)
         if("-" in date):
             end = date.rfind("-")
-        else:
+        elif("+" in date):
             end = date.rfind("+")
-
-        t = time.strptime(str(date[6:end]).strip(),"%a, %d %b %Y %H:%M:%S")
+        
+        t = None
+        if("," in date):
+            t = time.strptime(str(date[6:end]).strip(),"%a, %d %b %Y %H:%M:%S")
+        else:
+            t = time.strptime(str(date[6:end]).strip(),"%d %b %Y %H:%M:%S")
+            
         t = time.strftime("%I:%M %p %a, %b %d",t)
         
         return t

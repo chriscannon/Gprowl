@@ -161,7 +161,8 @@ class GmailIdleNotifier:
             elif(idleMode and "EXISTS" in line):
                 emailId = line.split(" ")[1]
                 if(emailId not in previousId):
-                    print "A new message has been received..."
+                    print "A new message has been received... " + time.strftime("%m-%d-%Y %H:%M:%S")
+                    
                     self.fetchEmail(emailId)
                     previousId = emailId
     

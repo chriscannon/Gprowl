@@ -12,6 +12,9 @@ Usage: python gprowl.py [options]
 
 Options:
     -h, --help              show this help
+    -a ..., --api=...       Prowl API key
+    -u ..., --username=...  Gmail username
+    -p ..., --password=...  Gmail password
     -l ..., --location=...  Location of openssl
     
 Example:
@@ -46,8 +49,10 @@ cmd = [openssl, "s_client", "-connect", "imap.gmail.com:993", "-crlf"]
 class GmailIdleNotifier:
     def __init__(self):
         self.checkConnection()
-        self.getProwlApiKey()
-        self.getGmailCredentials()
+        if(len(apiKey) == 0):
+            self.getProwlApiKey()
+        if((len(username) == 0) or (len(password) == 0)):
+            self.getGmailCredentials()
     
     def checkConnection(self):
         """Determines if the system has an Internet connection available."""
@@ -142,6 +147,10 @@ class GmailIdleNotifier:
             elif("authenticated (Success)" in line):
                 print "Successful authentication..."
                 p.stdin.write(". examine INBOX\n")
+            # Invalid command line credentials
+            elif("Invalid credentials" in line):
+                print "Invalid Gmail credentials..."
+                sys.exit(1)
             # Start IDLE mode
             elif("INBOX selected. (Success)" in line):
                 p.stdin.write(". idle\n")
@@ -247,7 +256,7 @@ def main(argv):
     global apiKey, username, password, openssl
     
     try:
-        opts, args = getopt.getopt(argv, "hl:", ["help","location="])
+        opts, args = getopt.getopt(argv, "hl:a:u:p:", ["help","location=","api=","username=","password="])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -257,6 +266,12 @@ def main(argv):
             sys.exit()
         elif opt in ("-l", "--location"):
             openssl = arg
+        elif opt in ("-a", "--api"):
+            apiKey = arg
+        elif opt in ("-u", "--username"):
+            username = arg
+        elif opt in ("-p", "--password"):
+            password = arg
             
     print "Starting Gprowl Notifier"
     GmailIdleNotifier().start()

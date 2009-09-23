@@ -22,8 +22,8 @@ Example:
 """
 
 __author__ = "Christopher T. Cannon (christophertcannon@gmail.com)"
-__version__ = "0.9"
-__date__ = "2009/09/20"
+__version__ = "0.9.1"
+__date__ = "2009/09/22"
 __copyright__ = "Copyright (c) 2009 Christopher T. Cannon"
 
 import sys

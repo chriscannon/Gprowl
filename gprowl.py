@@ -99,34 +99,31 @@ class GmailIdleNotifier:
             uname = raw_input("Gmail User Name: ")
             passwd = getpass.getpass("Gmail Password: ")
             
-            if(not uname.endswith("@gmail.com")):
-                print "Please append @gmail.com to the user name."
-            else:
-                global cmd
-                p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            global cmd
+            p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            line = p.stdout.readline()
+            while(line != None):
+                # Input the credentials
+                if("* OK Gimap ready" in line):
+                    p.stdin.write(". login %s %s\n" % (uname, passwd))
+                # Credentials are valid
+                elif("authenticated (Success)" in line):
+                    loop = False
+                    username = uname
+                    password = passwd
+                    break
+                elif("Invalid credentials" in line):
+                    print "The Gmail username or password entered is invalid."
+                    print "Please re-enter the Gmail username and password."
+                    break
                 
                 line = p.stdout.readline()
-                while(line != None):
-                    # Input the credentials
-                    if("* OK Gimap ready" in line):
-                        p.stdin.write(". login %s %s\n" % (uname, passwd))
-                    # Credentials are valid
-                    elif("authenticated (Success)" in line):
-                        loop = False
-                        username = uname
-                        password = passwd
-                        break
-                    elif("Invalid credentials" in line):
-                        print "The Gmail username or password entered is invalid."
-                        print "Please re-enter the Gmail username and password."
-                        break
-                    
-                    line = p.stdout.readline()
-                
-                # Kill the subprocess
-                import os
-                import signal
-                os.kill(p.pid, signal.SIGTERM)
+            
+            # Kill the subprocess
+            import os
+            import signal
+            os.kill(p.pid, signal.SIGTERM)
             
     
     def start(self):

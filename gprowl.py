@@ -22,8 +22,8 @@ Example:
 """
 
 __author__ = "Christopher T. Cannon (christophertcannon@gmail.com)"
-__version__ = "0.9.1"
-__date__ = "2009/09/22"
+__version__ = "0.9.2"
+__date__ = "2009/09/25"
 __copyright__ = "Copyright (c) 2009 Christopher T. Cannon"
 
 import sys
@@ -186,16 +186,18 @@ class GmailIdleNotifier:
             # Extract the email information
             elif("INBOX selected. (Success)" in line):         
                 p.stdin.write(". fetch %s (body[header.fields (from subject date)])\n" % emailId)
-                p.stdout.readline()
+                emailInfo = p.stdout.readline()
                 
-                for i in range(0,3):
-                    emailInfo = p.stdout.readline()
+                while(". OK Success" not in emailInfo):
                     if("Subject:" in emailInfo):
                         subject = emailInfo.strip()
                     elif("Date:" in emailInfo):
                         date = self.formatDate(emailInfo).strip()
                     elif("From:" in emailInfo):
-                        sender = self.removeEmailAddress(emailInfo).strip()   
+                        sender = self.removeEmailAddress(emailInfo).strip() 
+                        
+                    emailInfo = p.stdout.readline()
+                      
                 break
             
             line = p.stdout.readline()
@@ -210,10 +212,8 @@ class GmailIdleNotifier:
     def formatDate(self,date):
         """Returns a more human-readable format of the email's date."""    
         end = len(date)
-        if("-" in date):
-            end = date.rfind("-")
-        elif("+" in date):
-            end = date.rfind("+")
+        if(("-" in date) or ("+" in date)):
+            end = date.rfind(":") + 3
         
         t = None
         if("," in date):

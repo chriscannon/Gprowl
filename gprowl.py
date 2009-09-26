@@ -226,7 +226,7 @@ class GmailIdleNotifier:
         """Removes the email address from the FROM field."""
         pos = email.find(" <")
         
-        return email[:pos]
+        return email[:pos].replace('\"', '')
         
     def sendProwlMessage(self, message):
         """Send a message using the Prowl API"""

@@ -18,18 +18,19 @@ Options:
     -l ..., --location=...  Location of openssl
     
 Example:
+    gprowl.py
+    gprowl.py -a <YOUR_API_KEY> -u <YOUR_GMAIL_USERNAME> -p <YOUR_GMAIL_PASSWORD>
     gprowl.py -l /usr/bin/openssl
 """
 
 __author__ = "Christopher T. Cannon (christophertcannon@gmail.com)"
 __version__ = "0.9.2"
-__date__ = "2009/09/25"
+__date__ = "2009/09/26"
 __copyright__ = "Copyright (c) 2009 Christopher T. Cannon"
 
 import sys
 import subprocess
 import getopt
-from threading import Thread
 import time
 
 # Prowl API Key

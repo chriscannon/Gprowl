@@ -171,7 +171,7 @@ class GmailIdleNotifier:
         global cmd
         p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
-        date = sender = subject = ""
+        date = sender = subject = body = ""
         global username, password
         line = p.stdout.readline()
         while(line != None):
@@ -183,16 +183,22 @@ class GmailIdleNotifier:
                 p.stdin.write(". examine INBOX\n")
             # Extract the email information
             elif("INBOX selected. (Success)" in line):         
-                p.stdin.write(". fetch %s (body[header.fields (from subject date)])\n" % emailId)
+                p.stdin.write(". fetch %s (body[header.fields (from subject date)] body[1])\n" % emailId)
                 emailInfo = p.stdout.readline()
                 
+                captureBody = False
                 while(". OK Success" not in emailInfo):
                     if("Subject:" in emailInfo):
                         subject = emailInfo.strip()
                     elif("Date:" in emailInfo):
                         date = self.formatDate(emailInfo).strip()
                     elif("From:" in emailInfo):
-                        sender = self.removeEmailAddress(emailInfo).strip() 
+                        sender = self.removeEmailAddress(emailInfo).strip()
+                    elif(captureBody):
+                        body += emailInfo
+                    
+                    if("BODY[1]" in emailInfo):
+                        captureBody = True
                         
                     emailInfo = p.stdout.readline()
                       
@@ -205,7 +211,7 @@ class GmailIdleNotifier:
         import signal
         os.kill(p.pid, signal.SIGTERM)
             
-        self.sendProwlMessage("%s\n%s\n%s" % (date, sender, subject))
+        self.sendProwlMessage("%s\n%s\n%s\n%s" % (date, sender, subject,body[:100]))
         
     def formatDate(self,date):
         """Returns a more human-readable format of the email's date."""    
@@ -219,7 +225,7 @@ class GmailIdleNotifier:
         else:
             t = time.strptime(str(date[6:end]).strip(),"%d %b %Y %H:%M:%S")
             
-        t = time.strftime("%l:%M %p %a, %b %d, %y",t)
+        t = time.strftime("%l:%M %p %a, %b %d, %y")
         
         return t
     

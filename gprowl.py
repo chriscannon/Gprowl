@@ -219,7 +219,7 @@ class GmailIdleNotifier:
         else:
             t = time.strptime(str(date[6:end]).strip(),"%d %b %Y %H:%M:%S")
             
-        t = time.strftime("%l:%M %p %a, %b %d %y",t)
+        t = time.strftime("%l:%M %p %a, %b %d, %y",t)
         
         return t
     

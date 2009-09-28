@@ -188,15 +188,15 @@ class GmailIdleNotifier:
                 
                 captureBody = False
                 while(". OK Success" not in emailInfo):
-                    if("Subject:" in emailInfo):
+                    if(captureBody):
+                        body += emailInfo
+                    elif("Subject:" in emailInfo):
                         subject = emailInfo.strip()
                     elif("Date:" in emailInfo):
                         date = self.formatDate(emailInfo).strip()
                     elif("From:" in emailInfo):
                         sender = self.removeEmailAddress(emailInfo).strip()
-                    elif(captureBody):
-                        body += emailInfo
-                    
+                        
                     if("BODY[1]" in emailInfo):
                         captureBody = True
                         

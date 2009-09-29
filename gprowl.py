@@ -238,6 +238,13 @@ class GmailIdleNotifier:
         conn = httplib.HTTPSConnection(prowlUrl)
         conn.request("POST", "/publicapi/add", data, headers)
         response = conn.getresponse()
+        data = response.read()
+        
+        if("success" in data):
+            print "The notification was successfully delivered."
+        else:
+            print "The notification was not delivered."
+            print data
 
         conn.close()
         

@@ -24,8 +24,8 @@ Example:
 """
 
 __author__ = "Christopher T. Cannon (christophertcannon@gmail.com)"
-__version__ = "0.9.2"
-__date__ = "2009/09/26"
+__version__ = "0.9.3"
+__date__ = "2009/09/28"
 __copyright__ = "Copyright (c) 2009 Christopher T. Cannon"
 
 import sys
@@ -183,7 +183,7 @@ class GmailIdleNotifier:
                 p.stdin.write(". examine INBOX\n")
             # Extract the email information
             elif("INBOX selected. (Success)" in line):         
-                p.stdin.write(". fetch %s (body[header.fields (from subject date)] body[1])\n" % emailId)
+                p.stdin.write(". fetch %s (body[header.fields (from subject)] body[1])\n" % emailId)
                 emailInfo = p.stdout.readline()
                 
                 captureBody = False
@@ -191,9 +191,7 @@ class GmailIdleNotifier:
                     if(captureBody):
                         body += emailInfo
                     elif("Subject:" in emailInfo):
-                        subject = emailInfo.strip()
-                    elif("Date:" in emailInfo):
-                        date = self.formatDate(emailInfo).strip()
+                        subject = emailInfo.strip()                
                     elif("From:" in emailInfo):
                         sender = self.removeEmailAddress(emailInfo).strip()
                         
@@ -211,23 +209,15 @@ class GmailIdleNotifier:
         import signal
         os.kill(p.pid, signal.SIGTERM)
             
-        self.sendProwlMessage("%s\n%s\n%s\n%s" % (date, sender, subject,body[:100]))
+        # Grab the current system time
+        date = time.strftime("%l:%M %p %a, %b %d, %y").strip()
         
-    def formatDate(self,date):
-        """Returns a more human-readable format of the email's date."""    
-        end = len(date)
-        if(("-" in date) or ("+" in date)):
-            end = date.rfind(":") + 3
+        # If the body is longer than the maximum length (1000 chars)
+        # add an elipses to the end
+        if(len(body) > 1000):
+            body = body[:1000] + "..."
         
-        t = None
-        if("," in date):
-            t = time.strptime(str(date[6:end]).strip(),"%a, %d %b %Y %H:%M:%S")
-        else:
-            t = time.strptime(str(date[6:end]).strip(),"%d %b %Y %H:%M:%S")
-            
-        t = time.strftime("%l:%M %p %a, %b %d, %y")
-        
-        return t
+        self.sendProwlMessage("%s\n%s\n%s\n%s" % (date, sender, subject, body))
     
     def removeEmailAddress(self, email):
         """Removes the email address from the FROM field."""

@@ -13,19 +13,21 @@ Usage: python gprowl.py [options]
 Options:
     -h, --help              show this help
     -a ..., --api=...       Prowl API key
+    -r ..., --priority=...  Prowl message priority
     -u ..., --username=...  Gmail username
     -p ..., --password=...  Gmail password
     -l ..., --location=...  Location of openssl
     
 Example:
-    gprowl.py
-    gprowl.py -a <YOUR_API_KEY> -u <YOUR_GMAIL_USERNAME> -p <YOUR_GMAIL_PASSWORD>
-    gprowl.py -l /usr/bin/openssl
+    python gprowl.py
+    python gprowl.py -a <YOUR_API_KEY> -u <YOUR_GMAIL_USERNAME> -p <YOUR_GMAIL_PASSWORD>
+    python gprowl.py -l /usr/bin/openssl
+    python gprowl.py -r 2
 """
 
 __author__ = "Christopher T. Cannon (christophertcannon@gmail.com)"
-__version__ = "0.9.3"
-__date__ = "2009/09/28"
+__version__ = "0.9.9"
+__date__ = "2009/10/04"
 __copyright__ = "Copyright (c) 2009 Christopher T. Cannon"
 
 import sys
@@ -37,6 +39,8 @@ import time
 apiKey = ""
 # Prowl API URL
 prowlUrl = "prowl.weks.net"
+# Prowl Message Priority
+priority = 0
 # Gmail user name
 username = ""
 # Gmail password
@@ -47,13 +51,31 @@ openssl = "/usr/bin/openssl"
 cmd = [openssl, "s_client", "-connect", "imap.gmail.com:993", "-crlf"]
 
 
+
 class GmailIdleNotifier:
     def __init__(self):
+        self.checkClient()
         self.checkConnection()
+        
         if(len(apiKey) == 0):
             self.getProwlApiKey()
-        if((len(username) == 0) or (len(password) == 0)):
-            self.getGmailCredentials()
+            
+        if(len(username) == 0):
+            self.getGmailUserName()
+            
+        if(len(password) == 0):
+            self.getGmailPassword()
+            
+        self.checkGmailCredentials()
+    
+    def checkClient(self):
+        """Determines if the OpenSSL path is valid."""
+        global openssl
+        import os
+        
+        if(not os.path.isfile(openssl)):
+            print "The OpenSSL path is not valid."
+            sys.exit(1)
     
     def checkConnection(self):
         """Determines if the system has an Internet connection available."""
@@ -89,17 +111,23 @@ class GmailIdleNotifier:
                 
             conn.close()
                      
+    def getGmailUserName(self):
+        """Get the user's Gmail username."""
+        global username
+        username = raw_input("Gmail User Name: ")
         
-    def getGmailCredentials(self):
+    def getGmailPassword(self):
+        """Get the user's Gmail password."""
+        global password
+        import getpass
+        password = getpass.getpass("Gmail Password: ")
+        
+    def checkGmailCredentials(self):
         """Prompt the user and verify their Gmail credentials."""
         global username, password
         
-        import getpass
         loop = True
         while(loop):
-            uname = raw_input("Gmail User Name: ")
-            passwd = getpass.getpass("Gmail Password: ")
-            
             global cmd
             p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             
@@ -107,16 +135,16 @@ class GmailIdleNotifier:
             while(line != None):
                 # Input the credentials
                 if("* OK Gimap ready" in line):
-                    p.stdin.write(". login %s %s\n" % (uname, passwd))
+                    p.stdin.write(". login %s %s\n" % (username, password))
                 # Credentials are valid
                 elif("authenticated (Success)" in line):
                     loop = False
-                    username = uname
-                    password = passwd
                     break
                 elif("Invalid credentials" in line):
                     print "The Gmail username or password entered is invalid."
                     print "Please re-enter the Gmail username and password."
+                    self.getGmailUserName()
+                    self.getGmailPassword()
                     break
                 
                 line = p.stdout.readline()
@@ -135,6 +163,7 @@ class GmailIdleNotifier:
         
         idleMode = False
         previousId = ""
+        previousLine = ""
         global username, password
         line = p.stdout.readline()
         while(line != None):
@@ -154,16 +183,19 @@ class GmailIdleNotifier:
                 p.stdin.write(". idle\n")
                 idleMode = True
                 print "Now in IMAP IDLE mode..."
+            elif("EXPUNGE" in line):
+                previousId = ""
             # If IDLE mode is True and the email ID was not
             # previously sent, send a Prowl message
             elif(idleMode and "EXISTS" in line):
                 emailId = line.split(" ")[1]
-                if(emailId not in previousId):
+                if((emailId not in previousId) and ("EXPUNGE" not in previousLine)):
                     print "A new message has been received... " + time.strftime("%m-%d-%Y %H:%M:%S")
                     
                     self.fetchEmail(emailId)
                     previousId = emailId
-    
+            
+            previousLine = line
             line = p.stdout.readline()
           
     def fetchEmail(self, emailId):
@@ -213,9 +245,12 @@ class GmailIdleNotifier:
         date = time.strftime("%l:%M %p %a, %b %d, %y").strip()
         
         # If the body is longer than the maximum length (1000 chars)
-        # add an elipses to the end
+        # add an elipses to the end.
+        # Else remove the ")" character from the end.
         if(len(body) > 1000):
             body = body[:1000] + "..."
+        else:
+            body = body[:-3]
         
         self.sendProwlMessage("%s\n%s\n%s\n%s" % (date, sender, subject, body))
     
@@ -229,8 +264,8 @@ class GmailIdleNotifier:
         """Send a message using the Prowl API"""
         import urllib
         import httplib
-        global apiKey
-        data = urllib.urlencode({'apikey': apiKey, 'event': "Gmail", 'application': "Gprowl", 'description': message})
+        global apiKey, priority
+        data = urllib.urlencode({'apikey': apiKey, 'event': "Gmail", 'application': "Gprowl", 'priority': priority, 'description': message})
         headers = {"Content-type": "application/x-www-form-urlencoded",
         'User-Agent': "Gprowl/%s" % str(__version__)}
 
@@ -255,10 +290,10 @@ def usage():
 def main(argv):
     """Parses the arguments and starts the program."""
     
-    global apiKey, username, password, openssl
+    global apiKey, username, password, openssl, priority
     
     try:
-        opts, args = getopt.getopt(argv, "hl:a:u:p:", ["help","location=","api=","username=","password="])
+        opts, args = getopt.getopt(argv, "hl:a:u:p:r:", ["help","location=","api=","username=","password=", "priority="])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -274,6 +309,14 @@ def main(argv):
             username = arg
         elif opt in ("-p", "--password"):
             password = arg
+        elif opt in ("-r", "--priority"):
+            p = int(arg)
+            if((p >= -2) and (p <= 2)):
+                priority = p
+            else:
+                print "Bad Prowl message priority value."
+                print "The priority value must be between -2 and 2."
+                sys.exit(1)
             
     print "Starting Gprowl Notifier"
     GmailIdleNotifier().start()

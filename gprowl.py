@@ -52,6 +52,8 @@ cmd = [openssl, "s_client", "-connect", "imap.gmail.com:993", "-crlf"]
 # Connection restart interval
 # 15 minutes in seconds
 timeOutInterval = 900
+# Previous email's ID
+previousId = ""
 
 class GmailIdleNotifier:
     def __init__(self):
@@ -172,7 +174,7 @@ class GmailIdleNotifier:
         self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     
         idleMode = False
-        global username, password
+        global username, password, previousId
         line = self.p.stdout.readline()
         while(line != ""):
             # Input the credentials
@@ -193,7 +195,11 @@ class GmailIdleNotifier:
             # previously sent, send a Prowl message
             elif(idleMode and "EXISTS" in line):
                 emailId = line.split(" ")[1]
-                self.fetchEmail(emailId)
+                
+                if(emailId not in previousId):
+                    previousId = emailId
+                    self.fetchEmail(emailId)
+                    
             
             line = self.p.stdout.readline()
                     

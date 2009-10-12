@@ -165,9 +165,9 @@ class GmailIdleNotifier:
         """Log into the Google IMAP server and enable IDLE mode."""
         global cmd
 
-        # Start the timer to restart the OpenSSL subprocess
+        # Start the timer to keep alive the OpenSSL subprocess
         import threading
-        self.timer = threading.Timer(timeOutInterval, self.timeOut)
+        self.timer = threading.Timer(timeOutInterval, self.keepAlive)
         self.timer.start()
         
         # Start the openssl process
@@ -203,15 +203,22 @@ class GmailIdleNotifier:
             
             line = self.p.stdout.readline()
                     
-    def timeOut(self):
-        """Kill the main OpenSSL subprocess."""
+    def keepAlive(self):
+        """Keep the connection from timing out by toggling
+        IDLE mode on/off."""
+        self.p.stdin.write("DONE\n")
+        self.p.stdin.write(". idle\n")
+        
+        import threading
+        self.timer = threading.Timer(timeOutInterval, self.keepAlive)
+        self.timer.start()
+        
+    def stop(self):
+        """Kill the timer thread."""
+        self.timer.cancel()
         import os
         import signal
         os.kill(self.p.pid, signal.SIGTERM)
-        
-    def stopTimer(self):
-        """Kill the timer thread."""
-        self.timer.cancel()
           
     def fetchEmail(self, emailId):
         """Grab the email's information and send a Prowl message."""
@@ -233,7 +240,7 @@ class GmailIdleNotifier:
             elif("INBOX selected. (Success)" in line):
                 p.stdin.write(". fetch %s flags\n" % emailId)
                 line = p.stdout.readline()
-                if("(\\Seen)" in line):
+                if("\\Seen" in line):
                     break
                 else:
                     unseenEmail = True
@@ -355,17 +362,12 @@ def main(argv):
             
     print "Starting Gprowl Notifier"
     gprowl = GmailIdleNotifier()
-    
-    # Constantly loop after the 
-    # time out interval expires
-    while 1:
-        try:
-            gprowl.start()
-        except KeyboardInterrupt:
-            print "\nStopping Gprowl..."
-            gprowl.stopTimer()
-            sys.exit(0)
-            
+    try:
+        gprowl.start()
+    except KeyboardInterrupt:
+        print "\nStopping Gprowl..."
+        gprowl.stop()
+        sys.exit(0)   
     
 if __name__ == "__main__":
     main(sys.argv[1:])

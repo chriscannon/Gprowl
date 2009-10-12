@@ -11,24 +11,22 @@ Requirements:
 Usage: python gprowl.py [options]
 
 Options:
-    -h, --help              show this help
-    -a ..., --api=...       Prowl API key
-    -r ..., --priority=...  Prowl message priority
-    -u ..., --username=...  Gmail username
-    -p ..., --password=...  Gmail password
-    -l ..., --location=...  Location of openssl
+    -h, --help                Show this help
+    -a ..., --api=...         Prowl API key
+    -r ..., --priority=...    Prowl message priority
+    -b ..., --bodyLength=...  Prowl message body length
+    -u ..., --username=...    Gmail username
+    -p ..., --password=...    Gmail password
+    -l ..., --location=...    Location of openssl
     
 Example:
     python gprowl.py
     python gprowl.py -a <YOUR_API_KEY> -u <YOUR_GMAIL_USERNAME> -p <YOUR_GMAIL_PASSWORD>
-    python gprowl.py -l /usr/bin/openssl
-    python gprowl.py -r 2
 """
 
 __author__ = "Christopher T. Cannon (christophertcannon@gmail.com)"
 __version__ = "0.9.9"
-__date__ = "2009/10/04"
-__copyright__ = "Copyright (c) 2009 Christopher T. Cannon"
+__date__ = "2009/10/11"
 
 import sys
 import subprocess
@@ -41,6 +39,8 @@ apiKey = ""
 prowlUrl = "prowl.weks.net"
 # Prowl Message Priority
 priority = 0
+# Prowl Body Length
+bodyLength = 1000
 # Gmail user name
 username = ""
 # Gmail password
@@ -49,11 +49,14 @@ password = ""
 openssl = "/usr/bin/openssl"
 # IMAP connection command
 cmd = [openssl, "s_client", "-connect", "imap.gmail.com:993", "-crlf"]
-
-
+# Connection restart interval
+# 15 minutes in seconds
+timeOutInterval = 900
 
 class GmailIdleNotifier:
     def __init__(self):
+        self.p = None
+        self.timer = None
         self.checkClient()
         self.checkConnection()
         
@@ -138,6 +141,7 @@ class GmailIdleNotifier:
                     p.stdin.write(". login %s %s\n" % (username, password))
                 # Credentials are valid
                 elif("authenticated (Success)" in line):
+                    print "Successful authentication..."
                     loop = False
                     break
                 elif("Invalid credentials" in line):
@@ -158,51 +162,57 @@ class GmailIdleNotifier:
     def start(self):
         """Log into the Google IMAP server and enable IDLE mode."""
         global cmd
-        # Start the openssl process
-        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # Start the timer to restart the OpenSSL subprocess
+        import threading
+        self.timer = threading.Timer(timeOutInterval, self.timeOut)
+        self.timer.start()
         
+        # Start the openssl process
+        self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    
         idleMode = False
-        previousId = ""
-        previousLine = ""
         global username, password
-        line = p.stdout.readline()
-        while(line != None):
+        line = self.p.stdout.readline()
+        while(line != ""):
             # Input the credentials
             if("* OK Gimap ready" in line):
-                p.stdin.write(". login %s %s\n" % (username, password))
+                self.p.stdin.write(". login %s %s\n" % (username, password))
             # Select the INBOX
             elif("authenticated (Success)" in line):
-                print "Successful authentication..."
-                p.stdin.write(". examine INBOX\n")
+                self.p.stdin.write(". examine INBOX\n")
             # Invalid command line credentials
             elif("Invalid credentials" in line):
                 print "Invalid Gmail credentials..."
                 sys.exit(1)
             # Start IDLE mode
             elif("INBOX selected. (Success)" in line):
-                p.stdin.write(". idle\n")
+                self.p.stdin.write(". idle\n")
                 idleMode = True
-                print "Now in IMAP IDLE mode..."
-            elif("EXPUNGE" in line):
-                previousId = ""
             # If IDLE mode is True and the email ID was not
             # previously sent, send a Prowl message
             elif(idleMode and "EXISTS" in line):
                 emailId = line.split(" ")[1]
-                if((emailId not in previousId) and ("EXPUNGE" not in previousLine)):
-                    print "A new message has been received... " + time.strftime("%m-%d-%Y %H:%M:%S")
-                    
-                    self.fetchEmail(emailId)
-                    previousId = emailId
+                self.fetchEmail(emailId)
             
-            previousLine = line
-            line = p.stdout.readline()
+            line = self.p.stdout.readline()
+                    
+    def timeOut(self):
+        """Kill the main OpenSSL subprocess."""
+        import os
+        import signal
+        os.kill(self.p.pid, signal.SIGTERM)
+        
+    def stopTimer(self):
+        """Kill the timer thread."""
+        self.timer.cancel()
           
     def fetchEmail(self, emailId):
         """Grab the email's information and send a Prowl message."""
         global cmd
         p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
+        unseenEmail = False
         date = sender = subject = body = ""
         global username, password
         line = p.stdout.readline()
@@ -213,8 +223,17 @@ class GmailIdleNotifier:
             # Select the INBOX
             elif("authenticated (Success)" in line):
                 p.stdin.write(". examine INBOX\n")
+            # Make sure the e-mail has not already been viewed.
+            elif("INBOX selected. (Success)" in line):
+                p.stdin.write(". fetch %s flags\n" % emailId)
+                line = p.stdout.readline()
+                if("(\\Seen)" in line):
+                    break
+                else:
+                    unseenEmail = True
+                    print "A new message has been received... " + time.strftime("%m-%d-%Y %H:%M:%S")              
             # Extract the email information
-            elif("INBOX selected. (Success)" in line):         
+            elif(unseenEmail):         
                 p.stdin.write(". fetch %s (body[header.fields (from subject)] body[1])\n" % emailId)
                 emailInfo = p.stdout.readline()
                 
@@ -240,19 +259,21 @@ class GmailIdleNotifier:
         import os
         import signal
         os.kill(p.pid, signal.SIGTERM)
-            
-        # Grab the current system time
-        date = time.strftime("%l:%M %p %a, %b %d, %y").strip()
+           
+        if(unseenEmail): 
+            # Grab the current system time
+            date = time.strftime("%l:%M %p %a, %b %d, %y").strip()
         
-        # If the body is longer than the maximum length (1000 chars)
-        # add an elipses to the end.
-        # Else remove the ")" character from the end.
-        if(len(body) > 1000):
-            body = body[:1000] + "..."
-        else:
-            body = body[:-3]
+            global bodyLength
+            # If the body is longer than the maximum length (1000 chars)
+            # add an elipses to the end.
+            # Else remove the ")" character from the end.
+            if(len(body) > bodyLength):
+                body = body[:bodyLength] + "..."
+            else:
+                body = body[:-3]
         
-        self.sendProwlMessage("%s\n%s\n%s\n%s" % (date, sender, subject, body))
+            self.sendProwlMessage("%s\n%s\n%s\n%s" % (date, sender, subject, body))
     
     def removeEmailAddress(self, email):
         """Removes the email address from the FROM field."""
@@ -290,10 +311,10 @@ def usage():
 def main(argv):
     """Parses the arguments and starts the program."""
     
-    global apiKey, username, password, openssl, priority
+    global apiKey, username, password, openssl, priority, bodyLength
     
     try:
-        opts, args = getopt.getopt(argv, "hl:a:u:p:r:", ["help","location=","api=","username=","password=", "priority="])
+        opts, args = getopt.getopt(argv, "hl:a:u:p:r:b:", ["help","location=","api=","username=","password=", "priority=", "bodyLength="])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -314,12 +335,31 @@ def main(argv):
             if((p >= -2) and (p <= 2)):
                 priority = p
             else:
-                print "Bad Prowl message priority value."
+                print "Invalid Prowl message priority value."
                 print "The priority value must be between -2 and 2."
+                sys.exit(1)
+        elif opt in ("-b", "--bodyLength"):
+            b = int(arg)
+            if((b >= 0) and (b <= 1000)):
+                bodyLength = b
+            else:
+                print "Invalid Prowl body length value."
+                print "The body length value must be between 0 and 1000."
                 sys.exit(1)
             
     print "Starting Gprowl Notifier"
-    GmailIdleNotifier().start()
+    gprowl = GmailIdleNotifier()
+    
+    # Constantly loop after the 
+    # time out interval expires
+    while 1:
+        try:
+            gprowl.start()
+        except KeyboardInterrupt:
+            print "\nStopping Gprowl..."
+            gprowl.stopTimer()
+            sys.exit(0)
+            
     
 if __name__ == "__main__":
     main(sys.argv[1:])

@@ -12,10 +12,5 @@ Requirements:
 * iPhone:
    * Prowl
 
-Upcoming Features:
-See the SourceForge feature request page.
-http://sourceforge.net/tracker/?group_id=279069&atid=1184626
-
-Bugs:
-See the SourceForge bug tracker page.
-http://sourceforge.net/tracker/?group_id=279069&atid=1184623
+Note: This project was imported from SourceForge here:
+https://sourceforge.net/projects/gprowl/
